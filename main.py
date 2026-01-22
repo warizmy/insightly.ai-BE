@@ -8,7 +8,12 @@ app = FastAPI(
     description="Customer Feedback Sentiment Analysis API"
 )
 
-model = SentimentInference()
+model = None
+
+@app.on_event("startup")
+def load_model():
+    global model
+    model = SentimentInference()
 
 @app.get("/health")
 def health_check():
@@ -16,5 +21,7 @@ def health_check():
 
 @app.post("/predict", response_model=PredictResponse)
 def predict_sentiment(payload: PredictRequest):
-    result = model.predict(payload.text)
-    return result
+    if not payload.text.strip():
+        return {"label": "neutral", "confidence": 0.0}
+
+    return model.predict(payload.text)

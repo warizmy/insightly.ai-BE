@@ -7,14 +7,17 @@ from app.preprocess import clean_text
 
 class SentimentInference:
     def __init__(self):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = None
+        self.tokenizer = None
 
-        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-        self.model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
-        self.model.to(self.device)
-        self.model.eval()
+    def load_model(self):
+        if self.model is None:
+            self.tokenizer = AutoTokenizer.from_pretrained("models/")
+            self.model = AutoModelForSequenceClassification.from_pretrained("models/")
+            self.model.eval()
 
     def predict(self, text: str):
+        self.load_model()
         text = clean_text(text)
 
         inputs = self.tokenizer(

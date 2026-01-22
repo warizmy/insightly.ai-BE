@@ -6,17 +6,17 @@ This service is built with **FastAPI** and powered by a **Transformer-based mode
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-- 🔍 Sentiment analysis for customer reviews
-- 🤖 Transformer-based NLP model (DistilBERT)
-- ⚡ Fast and lightweight FastAPI backend
-- 📦 Ready-to-deploy for cloud platforms (Render, Railway, etc.)
-- 🌐 RESTful API, easy to integrate with any frontend
+- Sentiment analysis for customer reviews
+- Transformer-based NLP model (DistilBERT)
+- Fast and lightweight FastAPI backend
+- Ready-to-deploy for cloud platforms (Render, Railway, etc.)
+- RESTful API, easy to integrate with any frontend
 
 ---
 
-## 🧠 Model Overview
+## Model Overview
 
 - **Task**: Sentiment Classification
 - **Labels**: Negative, Neutral, Positive
@@ -36,31 +36,7 @@ This service is built with **FastAPI** and powered by a **Transformer-based mode
 
 ---
 
-## 🗂 Project Structure
-
-```
-backend/
-│
-├── app/
-│   ├── main.py          # FastAPI entry point
-│   ├── inference.py     # Model loading & prediction logic
-│   └── schemas.py       # Request & response schemas
-│
-├── models/              # Trained model & tokenizer files
-│   ├── model.safetensors
-│   ├── config.json
-│   ├── tokenizer.json
-│   ├── vocab.txt
-│   ├── tokenizer_config.json
-│   └── special_tokens_map.json
-│
-├── requirements.txt
-└── README.md
-```
-
----
-
-## 🚀 Getting Started (Local)
+## Getting Started (Local)
 
 ### 1. Clone Repository
 
@@ -100,11 +76,11 @@ http://127.0.0.1:8000/docs
 
 ---
 
-## 📡 API Usage
+## API Usage
 
 ### Health Check
 
-**GET /**
+**GET /health**
 
 Response:
 ```json
@@ -134,7 +110,7 @@ Response:
 
 ---
 
-## 🧪 Testing with Postman
+## Testing with Postman
 
 1. Set method to **POST**
 2. URL: `/predict`
@@ -144,7 +120,7 @@ Response:
 
 ---
 
-## ☁️ Deployment
+## Deployment
 
 This API is optimized for deployment on platforms like **Render**.
 
@@ -158,25 +134,10 @@ Ensure that the `models/` directory is included in the deployment.
 
 ---
 
-## 🔮 Future Improvements
+## Future Improvements
 
 - Improve Neutral class performance
 - Add batch prediction endpoint
 - Aspect-based sentiment analysis
 - Topic modeling for feedback clustering
 - Authentication & rate limiting
-
----
-
-## 👨‍💻 Author
-
-**Abid Rizmi**  
-Computer Science Graduate  
-Focused on AI, Machine Learning, and Data-Driven Systems
-
----
-
-## 📄 License
-
-This project is intended for educational and portfolio purposes.
-

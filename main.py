@@ -1,11 +1,19 @@
 from fastapi import FastAPI
 from app.schemas import PredictRequest, PredictResponse
 from app.inference import SentimentInference
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global model
+    model = SentimentInference()
+    yield
 
 app = FastAPI(
     title="Insightly.ai API",
     version="1.0",
-    description="Customer Feedback Sentiment Analysis API"
+    description="Customer Feedback Sentiment Analysis API",
+    lifespan=lifespan
 )
 
 model = None

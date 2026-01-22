@@ -25,7 +25,7 @@ class SentimentInference:
             return_tensors="pt",
             truncation=True,
             padding=True,
-            max_length=256
+            max_length=1024
         ).to(self.device)
 
         outputs = self.model(**inputs)

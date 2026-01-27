@@ -80,7 +80,7 @@ http://127.0.0.1:8000/docs
 
 ### Health Check
 
-**GET /health**
+**GET** ```/health```
 
 Response:
 ```json
@@ -91,7 +91,7 @@ Response:
 
 ### Sentiment Prediction
 
-**POST /predict**
+**POST** ```/predict```
 
 Request Body:
 ```json

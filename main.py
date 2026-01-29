@@ -26,16 +26,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.get("/health")
 def health_check():
-    """Endpoint untuk monitoring kesehatan layanan."""
     return {"status": "ok"}
 
 @app.post("/predict", response_model=PredictResponse)
 @limiter.limit("60/minute")
 def predict_sentiment(payload: PredictRequest, request: Request):
-    """
-    Melakukan analisis sentimen pada teks yang diberikan.
-    Rate limit: 60 requests per minute.
-    """
     if not payload.text.strip():
         return {
             "label": "Neutral", 

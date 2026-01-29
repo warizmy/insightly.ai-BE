@@ -2,17 +2,17 @@
 
 Insightly.ai is a backend service for analyzing customer feedback using **Natural Language Processing (NLP)**. The API performs **sentiment classification** (Negative, Neutral, Positive) on textual reviews, such as Google Play Store reviews, to help businesses gain actionable insights from user feedback.
 
-This service is built with **FastAPI** and powered by a **Transformer-based model (DistilBERT)** fine-tuned on real-world review data.
+This service is built with **FastAPI** and powered by a **Transformer-based model (DistilBERT)**, integrated directly with the **Hugging Face Hub** for efficient model management.
 
 ---
 
 ## Key Features
 
-- Sentiment analysis for customer reviews
-- Transformer-based NLP model (DistilBERT)
-- Fast and lightweight FastAPI backend
-- Ready-to-deploy for cloud platforms (Render, Railway, etc.)
-- RESTful API, easy to integrate with any frontend
+- **Sentiment Analysis**: Classifies text into Negative, Neutral, and Positive.
+- **Transformer-based**: Powered by a fine-tuned DistilBERT for superior accuracy.
+- **Cloud Optimized**: Decoupled model storage (Hugging Face) from application logic for faster builds and deployments.
+- **Rate Limited**: Built-in protection against API abuse (60 req/min).
+- **Auto-generated Docs**: Fully documented via Swagger UI.
 
 ---
 
@@ -22,7 +22,7 @@ This service is built with **FastAPI** and powered by a **Transformer-based mode
 - **Labels**: Negative, Neutral, Positive
 - **Architecture**: DistilBERT
 - **Framework**: Hugging Face Transformers
-- **Training Environment**: Google Colab
+- **Training Source**: Google Play Store Reviews. You can accsess [here](https://www.kaggle.com/datasets/prakharrathi25/google-play-store-reviews).
 
 ### Evaluation Summary
 
@@ -41,7 +41,7 @@ This service is built with **FastAPI** and powered by a **Transformer-based mode
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-username/insightly-api.git
+git clone https://github.com/warizmy/insightly-api.git
 cd insightly-api
 ```
 
@@ -61,7 +61,7 @@ pip install -r requirements.txt
 ### 4. Run the Server
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
 API will be available at:
@@ -80,7 +80,7 @@ http://127.0.0.1:8000/docs
 
 ### Health Check
 
-**GET /health**
+**GET** ```/health```
 
 Response:
 ```json
@@ -91,7 +91,7 @@ Response:
 
 ### Sentiment Prediction
 
-**POST /predict**
+**POST** ```/predict```
 
 Request Body:
 ```json
@@ -104,40 +104,31 @@ Response:
 ```json
 {
   "label": "Positive",
-  "confidence": 0.89
+  "confidence": 0.8942,
+  "probabilities": {
+    "Positive": 0.8942,
+    "Neutral": 0.0821,
+    "Negative": 0.0237
+  }
 }
+
 ```
-
----
-
-## Testing with Postman
-
-1. Set method to **POST**
-2. URL: `/predict`
-3. Headers:
-   - `Content-Type: application/json`
-4. Body → raw → JSON
-
----
 
 ## Deployment
 
-This API is optimized for deployment on platforms like **Render**.
+This API is Docker-ready and optimized for **Railway** or **Render**.
 
-### Recommended Start Command
+**Pro Tip**: The model is automatically fetched from the Hugging Face Hub during the application's lifespan. **No need to include heavy model weights in your Git repository**.
+
+### Start Command (Railway)
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
+uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
-
-Ensure that the `models/` directory is included in the deployment.
 
 ---
 
-## Future Improvements
-
-- Improve Neutral class performance
-- Add batch prediction endpoint
-- Aspect-based sentiment analysis
-- Topic modeling for feedback clustering
-- Authentication & rate limiting
+## API Policy
+To ensure high availability, this API implements a Rate Limiting policy:
+- **Limit**: 60 requests per minute per IP.
+- **Exceeding limit**: Returns a ```429 Too Many Requests``` status code.

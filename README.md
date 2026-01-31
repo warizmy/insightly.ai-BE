@@ -9,7 +9,7 @@ This service is built with **FastAPI** and powered by a **Transformer-based mode
 ## Key Features
 
 - **Sentiment Analysis**: Classifies text into Negative, Neutral, and Positive.
-- **Transformer-based**: Powered by a fine-tuned DistilBERT for superior accuracy.
+- **Transformer-based**: Powered DistilBERT.
 - **Cloud Optimized**: Decoupled model storage (Hugging Face) from application logic for faster builds and deployments.
 - **Rate Limited**: Built-in protection against API abuse (60 req/min).
 - **Auto-generated Docs**: Fully documented via Swagger UI.

@@ -1,4 +1,4 @@
-# Insightly.ai 
+# Insightly.ai - API
 ### Professional Sentiment Analysis & Strategic Business Insights API
 
 **Insightly.ai** is a high-performance backend service designed to transform raw customer feedback into actionable business strategies. By combining a fine-tuned **IndoBERT** model for precision sentiment classification and **Gemini 2.5 Flash** for strategic intelligence, Insightly.ai provides deep-dive analytics that go beyond simple "Positive/Negative" labels.

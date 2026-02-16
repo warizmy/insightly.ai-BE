@@ -6,3 +6,8 @@ torch
 pydantic
 numpy
 slowapi
+python-dotenv
+google-generativeai
+pandas       
+openpyxl
+python-multipart

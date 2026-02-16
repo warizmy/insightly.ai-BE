@@ -108,13 +108,3 @@ Upload a CSV or Excel file for mass analysis and full strategic reporting.
     }
 }
 ```
-
----
-
-## Author
-**Abid Khawarizmi**
-- GitHub: [@abidrizmii](https://github.com/abidrizmii)
-- Project: [Insightly.ai on Hugging Face](https://huggingface.co/spaces/abidrizmii/insightly.ai)
-
----
-*Developed with focus on efficiency, accuracy, and business value.*

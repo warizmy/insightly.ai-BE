@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 fastapi
-uvicorn
+uvicorn[standard]
 transformers
 torch
 pydantic
@@ -8,6 +8,6 @@ numpy
 slowapi
 python-dotenv
 google-generativeai
-pandas       
+pandas
 openpyxl
 python-multipart

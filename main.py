@@ -1,5 +1,8 @@
 import io
+import os
+import asyncio
 import pandas as pd
+from collections import Counter
 from fastapi import UploadFile, File, HTTPException
 from fastapi import FastAPI, Request
 from app.schemas import PredictRequest, PredictResponse
@@ -9,6 +12,7 @@ from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
 
 model_inference = SentimentInference()
 limiter = Limiter(key_func=get_remote_address)
@@ -25,16 +29,29 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+trusted_hosts_env = os.getenv("TRUSTED_HOSTS", "*")
+if trusted_hosts_env == "*":
+    trusted_hosts = None   # trust all (production behind proxy)
+else:
+    trusted_hosts = [h.strip() for h in trusted_hosts_env.split(",")]
+
+app.add_middleware(
+    ProxyHeadersMiddleware, 
+    trusted_hosts=trusted_hosts
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "model_loaded": model_inference.model is not None
+    }
 
 @app.post("/predict", response_model=PredictResponse)
-@limiter.limit("60/minute")
-def predict_sentiment(payload: PredictRequest, request: Request):
+@limiter.limit("120/minute")
+def predict_sentiment(request: Request, payload: PredictRequest):
     if not payload.text.strip():
         return {
             "label": "Neutral", 
@@ -47,24 +64,50 @@ def predict_sentiment(payload: PredictRequest, request: Request):
 gemini_service = GeminiService()
 
 @app.post("/analyze-batch")
-async def analyze_batch(texts: list[str]):
+@limiter.limit("30/minute")
+async def analyze_batch(request: Request, texts: list[str]):
+    
+    if len(texts) > 200:
+        raise HTTPException(400, "Max 200 texts per request")
+    
+    if any(len(t) > 2000 for t in texts):
+        raise HTTPException(400, "Text too long (max 2000 chars each)")
+
+    if not texts:
+        raise HTTPException(400, "Empty input")
+
     results = []
     neg_samples = []
     
-    for t in texts:
-        res = model_inference.predict(t)
+    tasks = [
+        asyncio.to_thread(model_inference.predict, t)
+        for t in texts
+    ]
+    responses = await asyncio.gather(*tasks)
+
+    for res, t in zip(responses, texts):
         results.append(res['label'])
         if res['label'] == "Negative":
             neg_samples.append(t)
-
+    
     total = len(results)
+    if total == 0:
+        return {"summary_stats": {}, "ai_insights": "", "total_processed": 0}
+    
+    c = Counter(results)
     stats = {
-        "Positive": f"{(results.count('Positive')/total)*100:.1f}%",
-        "Negative": f"{(results.count('Negative')/total)*100:.1f}%",
-        "Neutral": f"{(results.count('Neutral')/total)*100:.1f}%"
+        "Positive": f"{(c['Positive']/total)*100:.1f}%",
+        "Negative": f"{(c['Negative']/total)*100:.1f}%",
+        "Neutral": f"{(c['Neutral']/total)*100:.1f}%"
     }
 
-    insights = await gemini_service.generate_business_report(stats, neg_samples[:5])
+    try:
+        insights = await asyncio.wait_for(
+            gemini_service.generate_business_report(stats, neg_samples[:5]),
+            timeout=20
+        )
+    except Exception:
+        insights = "AI insights unavailable at the moment."
 
     return {
         "summary_stats": stats,
@@ -73,7 +116,8 @@ async def analyze_batch(texts: list[str]):
     }
 
 @app.post("/analyze-upload")
-async def analyze_upload(file: UploadFile = File(...)):
+@limiter.limit("10/minute")
+async def analyze_upload(request: Request, file: UploadFile = File(...)):
     
     filename = file.filename
     ext = filename.split('.')[-1].lower()
@@ -84,8 +128,14 @@ async def analyze_upload(file: UploadFile = File(...)):
             detail="Format file tidak didukung. Harap unggah file dengan ekstensi .csv atau .xlsx."
         )
 
+    if not file.filename:
+        raise HTTPException(400, "Invalid file")
+
     try:
         contents = await file.read()
+        if len(contents) > 5 * 1024 * 1024:  # 5MB
+            raise HTTPException(400, "File too large (max 5MB)")
+        
         if ext == 'csv':
             try:
                 df = pd.read_csv(io.BytesIO(contents), encoding='utf-8')
@@ -94,6 +144,8 @@ async def analyze_upload(file: UploadFile = File(...)):
         else:
             df = pd.read_excel(io.BytesIO(contents))
             
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal memproses file {filename}: {str(e)}")
 
@@ -103,26 +155,39 @@ async def analyze_upload(file: UploadFile = File(...)):
     texts = df[target_col].dropna().astype(str).tolist()
     if not texts:
         raise HTTPException(status_code=400, detail="Data tidak ditemukan.")
+    
+    if len(texts) > 2000:
+        raise HTTPException(400, "Max 2000 rows")
 
     results = model_inference.predict_batch(texts, batch_size=16)
     neg_samples = [texts[i] for i, label in enumerate(results) if label == "Negative"]
     
     total = len(results)
+    if total == 0:
+        return {"summary_stats": {}, "ai_insights": "", "total_processed": 0}
+    
+    c = Counter(results)
     stats = {
-        "positive_count": results.count('Positive'),
-        "negative_count": results.count('Negative'),
-        "neutral_count": results.count('Neutral'),
+        "positive_count": c['Positive'],
+        "negative_count": c['Negative'],
+        "neutral_count": c['Neutral'],
         "distribution": {
-            "Positive": f"{(results.count('Positive')/total)*100:.2f}%",
-            "Negative": f"{(results.count('Negative')/total)*100:.2f}%",
-            "Neutral": f"{(results.count('Neutral')/total)*100:.2f}%"
+            "Positive": f"{(c['Positive']/total)*100:.2f}%",
+            "Negative": f"{(c['Negative']/total)*100:.2f}%",
+            "Neutral": f"{(c['Neutral']/total)*100:.2f}%"
         }
     }
-
-    strategic_insights = await gemini_service.generate_business_report(
-        stats['distribution'], 
-        neg_samples[:10]
-    )
+    
+    try:
+        strategic_insights = await asyncio.wait_for(
+            gemini_service.generate_business_report(
+                stats['distribution'], 
+                neg_samples[:10]
+            ),
+            timeout=30
+        )
+    except asyncio.TimeoutError:
+        strategic_insights = "AI insights generation timed out."
 
     return {
         "status": "success",

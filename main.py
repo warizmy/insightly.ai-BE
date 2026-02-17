@@ -12,7 +12,6 @@ from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
 
 model_inference = SentimentInference()
 limiter = Limiter(key_func=get_remote_address)
@@ -29,16 +28,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-trusted_hosts_env = os.getenv("TRUSTED_HOSTS", "*")
-if trusted_hosts_env == "*":
-    trusted_hosts = None   # trust all (production behind proxy)
-else:
-    trusted_hosts = [h.strip() for h in trusted_hosts_env.split(",")]
-
-app.add_middleware(
-    ProxyHeadersMiddleware, 
-    trusted_hosts=trusted_hosts
-)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

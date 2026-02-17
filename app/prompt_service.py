@@ -10,6 +10,7 @@ class GeminiService:
         genai.configure(api_key=GEMINI_API_KEY)
         self.model = genai.GenerativeModel('gemini-2.5-flash')
 
+    # For Analyze-Upload endpoint
     async def generate_business_report(self, stats: dict, samples: list):
         formatted_samples = "\n".join([f"- {s}" for s in samples])
         
@@ -40,3 +41,35 @@ class GeminiService:
             except:
                 return {"error": "Gagal parsing insight", "raw": raw_text}
         return {"error": "Format insight tidak sesuai", "raw": raw_text}
+
+    # For Analyze-Batch endpoint
+    async def generate_quick_summary(self, stats: dict, samples: list):
+        formatted_samples = "\n".join([f"- {s}" for s in samples])
+        
+        prompt = f"""
+        Role: Customer Experience Analyst.
+        Analisis teks feedback singkat berikut:
+        - Statistik: {stats}
+        - Feedback: 
+        {formatted_samples}
+
+        Tugas: Berikan ringkasan cepat dalam format JSON.
+        Output harus JSON ARRAY dengan kunci:
+        1. "summary": Ringkasan keseluruhan dalam 1-2 kalimat.
+        2. "pros": Array berisi maksimal 3 hal positif yang disebutkan.
+        3. "cons": Array berisi maksimal 3 keluhan utama.
+        4. "action_item": 1 saran perbaikan mendesak.
+
+        Pastikan hanya JSON.
+        """
+        
+        response = await self.model.generate_content_async(prompt)
+        raw_text = response.text
+        json_match = re.search(r'\[.*\]|\{.*\}', raw_text, re.DOTALL)
+        
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except:
+                return {"error": "Gagal parsing", "raw": raw_text}
+        return {"error": "Format tidak sesuai", "raw": raw_text}

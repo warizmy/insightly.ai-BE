@@ -2,13 +2,13 @@ import io
 import os
 import asyncio
 import pandas as pd
+from datetime import datetime
 from collections import Counter
-from fastapi import UploadFile, File, HTTPException
-from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
+from fastapi import UploadFile, File, HTTPException, FastAPI, Request
 from app.schemas import PredictRequest, PredictResponse
 from app.inference import SentimentInference
 from app.prompt_service import GeminiService
-from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -55,35 +55,25 @@ gemini_service = GeminiService()
 @app.post("/analyze-batch")
 @limiter.limit("30/minute")
 async def analyze_batch(request: Request, texts: list[str]):
-    
+    if not texts:
+        raise HTTPException(400, "Input teks kosong, harap masukkan data.")
+        
     if len(texts) > 200:
-        raise HTTPException(400, "Max 200 texts per request")
+        raise HTTPException(400, "Maksimal 200 teks per permintaan.")
     
     if any(len(t) > 2000 for t in texts):
-        raise HTTPException(400, "Text too long (max 2000 chars each)")
+        raise HTTPException(400, "Teks terlalu panjang (maksimal 2000 karakter per teks).")
 
-    if not texts:
-        raise HTTPException(400, "Empty input")
+    try:
+        results = model_inference.predict_batch(texts, batch_size=16)
+    except Exception as e:
+        raise HTTPException(500, f"Gagal memproses model: {str(e)}")
 
-    results = []
-    neg_samples = []
-    
-    tasks = [
-        asyncio.to_thread(model_inference.predict, t)
-        for t in texts
-    ]
-    responses = await asyncio.gather(*tasks)
-
-    for res, t in zip(responses, texts):
-        results.append(res['label'])
-        if res['label'] == "Negative":
-            neg_samples.append(t)
+    neg_samples = [texts[i] for i, label in enumerate(results) if label == "Negative"]
     
     total = len(results)
-    if total == 0:
-        return {"summary_stats": {}, "ai_insights": "", "total_processed": 0}
-    
     c = Counter(results)
+    
     stats = {
         "Positive": f"{(c['Positive']/total)*100:.1f}%",
         "Negative": f"{(c['Negative']/total)*100:.1f}%",
@@ -91,39 +81,40 @@ async def analyze_batch(request: Request, texts: list[str]):
     }
 
     try:
-        insights = await asyncio.wait_for(
-            gemini_service.generate_business_report(stats, neg_samples[:5]),
+        batch_insights = await asyncio.wait_for(
+            gemini_service.generate_quick_summary(stats, texts[:15]),
             timeout=30
         )
+    except asyncio.TimeoutError:
+        batch_insights = {"error": "AI analysis timed out", "summary": "Layanan AI sedang sibuk."}
     except Exception:
-        insights = "AI insights unavailable at the moment."
+        batch_insights = {"error": "AI unavailable", "summary": "Analisis AI tidak tersedia saat ini."}
 
     return {
-        "summary_stats": stats,
-        "ai_insights": insights,
-        "total_processed": total
+        "status": "success",
+        "total_processed": total,
+        "sentiment_stats": stats,
+        "quick_analysis": batch_insights
     }
 
 @app.post("/analyze-upload")
 @limiter.limit("10/minute")
 async def analyze_upload(request: Request, file: UploadFile = File(...)):
-    
     filename = file.filename
-    ext = filename.split('.')[-1].lower()
+    if not filename:
+        raise HTTPException(status_code=400, detail="File tidak valid atau nama file kosong.")
 
+    ext = filename.split('.')[-1].lower()
     if ext not in ['csv', 'xlsx', 'xls']:
         raise HTTPException(
             status_code=400, 
-            detail="Format file tidak didukung. Harap unggah file dengan ekstensi .csv atau .xlsx."
+            detail="Format file tidak didukung. Harap unggah file .csv atau .xlsx."
         )
-
-    if not file.filename:
-        raise HTTPException(400, "Invalid file")
 
     try:
         contents = await file.read()
         if len(contents) > 5 * 1024 * 1024:  # 5MB
-            raise HTTPException(400, "File too large (max 5MB)")
+            raise HTTPException(status_code=400, detail="File terlalu besar. Maksimal ukuran file adalah 5MB.")
         
         if ext == 'csv':
             try:
@@ -136,26 +127,24 @@ async def analyze_upload(request: Request, file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal memproses file {filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal membaca file {filename}: {str(e)}")
 
     possible_cols = ['content', 'review', 'text', 'feedback', 'komentar', 'ulasan', 'comment']
     target_col = next((col for col in df.columns if col.lower() in possible_cols), df.columns[0])
 
     texts = df[target_col].dropna().astype(str).tolist()
     if not texts:
-        raise HTTPException(status_code=400, detail="Data tidak ditemukan.")
+        raise HTTPException(status_code=400, detail="Tidak ada data teks yang ditemukan.")
     
     if len(texts) > 2000:
-        raise HTTPException(400, "Max 2000 rows")
+        raise HTTPException(status_code=400, detail="Maksimal 2000 baris teks per file.")
 
     results = model_inference.predict_batch(texts, batch_size=16)
+    
     neg_samples = [texts[i] for i, label in enumerate(results) if label == "Negative"]
-    
     total = len(results)
-    if total == 0:
-        return {"summary_stats": {}, "ai_insights": "", "total_processed": 0}
-    
     c = Counter(results)
+    
     stats = {
         "positive_count": c['Positive'],
         "negative_count": c['Negative'],
@@ -173,13 +162,21 @@ async def analyze_upload(request: Request, file: UploadFile = File(...)):
                 stats['distribution'], 
                 neg_samples[:10]
             ),
-            timeout=30
+            timeout=45
         )
     except asyncio.TimeoutError:
-        strategic_insights = "AI insights generation timed out."
+        strategic_insights = {"error": "Analisis AI memakan waktu terlalu lama. Silakan coba lagi."}
+    except Exception as e:
+        strategic_insights = {"error": f"Layanan AI tidak tersedia: {str(e)}"}
 
     return {
         "status": "success",
+        "metadata": {
+            "filename": filename,
+            "processed_at": datetime.now().isoformat(),
+            "detected_column": target_col,
+            "total_records": total
+        },
         "results": {
             "statistics": stats,
             "strategic_insights": strategic_insights

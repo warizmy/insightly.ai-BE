@@ -93,7 +93,7 @@ async def analyze_batch(request: Request, texts: list[str]):
     try:
         insights = await asyncio.wait_for(
             gemini_service.generate_business_report(stats, neg_samples[:5]),
-            timeout=20
+            timeout=30
         )
     except Exception:
         insights = "AI insights unavailable at the moment."
